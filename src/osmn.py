@@ -5,14 +5,11 @@ import os
 GRAPH_PATH = "./data/bh_graph.graphml"
 
 def generateNormalDistribution(restaurants, qtt_deliverers: int):
-    """Gera coordenadas aleatórias ao redor dos restaurantes."""
-    centers = qtt_deliverers//len(restaurants)
-    lats=[]
-    longs = []
-    for index,row in restaurants.iterrows():
-        longs.extend(np.random.normal(loc=row["LONGITUDE"],scale=0.003,size=centers))
-        lats.extend(np.random.normal(loc=row["LATITUDE"],scale=0.003,size=centers))
-    return lats,longs
+    """Gera coordenadas aleatórias ao redor de restaurantes sorteados."""
+    idx = np.random.randint(0, len(restaurants), size=qtt_deliverers)
+    lats = restaurants["LATITUDE"].to_numpy()[idx] + np.random.normal(0, 0.003, qtt_deliverers)
+    longs = restaurants["LONGITUDE"].to_numpy()[idx] + np.random.normal(0, 0.003, qtt_deliverers)
+    return lats, longs
 
 def getRealNodes(G, lats,longs):
     rn = ox.distance.nearest_nodes(G,X=longs, Y=lats)

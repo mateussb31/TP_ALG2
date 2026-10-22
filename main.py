@@ -31,10 +31,18 @@ restaurants["LONGITUDE"] = pd.to_numeric(restaurants["LONGITUDE"], errors="coerc
 restaurants = restaurants.dropna(subset=["LATITUDE", "LONGITUDE"]).reset_index(drop=True)
 restaurants["ID"] = restaurants.index.astype(str)
 
-markers_restaurants = [
-    dl.Marker(position=[r["LATITUDE"], r["LONGITUDE"]], children=[dl.Tooltip(str(r["NOME"]))])
-    for _, r in restaurants.iterrows()
-]
+# GeoJSON: evita criar um componente React por restaurante
+restaurants_geojson = {
+    "type": "FeatureCollection",
+    "features": [
+        {
+            "type": "Feature",
+            "properties": {"tooltip": str(r["NOME"])},
+            "geometry": {"type": "Point", "coordinates": [r["LONGITUDE"], r["LATITUDE"]]},
+        }
+        for _, r in restaurants.iterrows()
+    ],
+}
 
 # ============================================================
 # Frota + Trie
@@ -215,13 +223,14 @@ sidebar = html.Div(
 map_panel = dl.Map(
     children=[
         dl.TileLayer(),
-        dl.LayerGroup(markers_restaurants),
+        dl.GeoJSON(data=restaurants_geojson),
         dl.LayerGroup(id="radius-layer"),
         dl.LayerGroup(id="deliverers-layer", children=createDelivererMarkers(deliverers, set())),
     ],
     id="restaurant-map",
     center=INITIAL_CENTER,
     zoom=INITIAL_ZOOM,
+    preferCanvas=True,
     style={"flex": "1", "height": "100vh"},
 )
 
@@ -235,8 +244,7 @@ app.layout = html.Div(
 # Callbacks -> basicamente o que manipula a interface
 # ============================================================
 @app.callback(
-    Output("restaurant-map", "center"),
-    Output("restaurant-map", "zoom"),
+    Output("restaurant-map", "viewport"),
     Output("deliverers-table", "data"),
     Output("summary", "children"),
     Output("deliverers-layer", "children"),
@@ -252,14 +260,15 @@ def updateQuery(selected_restaurant, max_distance, n_clicks, fleet_size):
 
     if ctx.triggered_id == "generate-fleet-button":
         if not fleet_size or fleet_size < 1:
-            return (dash.no_update,) * 6 + ("Informe uma quantidade válida.",)
+            return (dash.no_update,) * 5 + ("Informe uma quantidade válida.",)
         rebuildFleet(int(fleet_size))
         status = f"Frota atualizada: {len(deliverers)} entregadores."
 
     match = restaurants.loc[restaurants["ID"] == str(selected_restaurant)]
     if match.empty:
         return (
-            INITIAL_CENTER, INITIAL_ZOOM, [], "Selecione um restaurante.",
+            {"center": INITIAL_CENTER, "zoom": INITIAL_ZOOM, "transition": "flyTo"},
+            [], "Selecione um restaurante.",
             createDelivererMarkers(deliverers, set()), [], status,
         )
 
@@ -324,7 +333,10 @@ def updateQuery(selected_restaurant, max_distance, n_clicks, fleet_size):
     ]
     zoom = int(max(10, min(17, round(16 - math.log2(max(max_distance, 0.5) / 0.5)))))
 
-    return [r_lat, r_lon], zoom, nearby, summary, createDelivererMarkers(deliverers, selected_ids), circle, status
+    return (
+        {"center": [r_lat, r_lon], "zoom": zoom, "transition": "flyTo"},
+        nearby, summary, createDelivererMarkers(deliverers, selected_ids), circle, status,
+    )
 
 
 if __name__ == "__main__":
